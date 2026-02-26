@@ -1,0 +1,80 @@
+# Instalar si no lo tienes
+install.packages("lifecontingencies")
+
+library(lifecontingencies)
+
+# 1. Crear tabla de mortalidad simple
+edad <- 0:110
+qx <- 0.0005 + (edad/120)^5  # función suavizada de mortalidad
+tabla <- new("actuarialtable",
+             interest = 0.05,
+             x = edad,
+             lx = cumprod(c(100000, 1 - qx[-length(qx)])),
+             name = "Tabla Simulada")
+
+# 2. Datos del seguro
+x <- 30        # edad
+m <- 20        # años de pago de primas
+
+# 3. Calcular valor actuarial del seguro vitalicio
+Ax <- Axn(tabla, x = x, n = Inf)
+
+# 4. Calcular valor actuarial de la renta temporal anticipada (20 años)
+ax_temp <- axn(tabla, x = x, n = m, type = "due")
+
+# 5. Prima nivelada (principio de equivalencia)
+P <- Ax / ax_temp
+
+P
+
+t <- 10
+
+# Valor actuarial del seguro a edad x+t
+Ax_t <- Axn(tabla, x = x + t, n = Inf)
+
+# Renta de primas restantes (m - t)
+if(t < m){
+  ax_restante <- axn(tabla, x = x + t, n = m - t, type = "due")
+} else {
+  ax_restante <- 0
+}
+
+# Reserva
+V_t <- Ax_t - P * ax_restante
+
+V_t
+
+reserva_limitada <- function(x, m, tabla){
+  
+  Ax <- Axn(tabla, x = x, n = Inf)
+  ax_temp <- axn(tabla, x = x, n = m, type = "due")
+  P <- Ax / ax_temp
+  
+  V <- numeric(m+30)
+  
+  for(t in 0:(m+30)){
+    
+    Ax_t <- Axn(tabla, x = x + t, n = Inf)
+    
+    if(t < m){
+      ax_restante <- axn(tabla, x = x + t, n = m - t, type = "due")
+    } else {
+      ax_restante <- 0
+    }
+    
+    V[t+1] <- Ax_t - P * ax_restante
+  }
+  
+  return(V)
+}
+
+V <- reserva_limitada(30, 20, tabla)
+
+plot(V, type="l", main="Reserva Seguro Vida Pagos Limitados",
+     xlab="Año", ylab="Reserva")
+
+################################
+#La reserva inicia cercana a 0.
+#Crece durante el período de pago de primas.
+#Después del año 20 (fin de primas), la reserva aumenta más rápido.
+#Tiende al capital asegurado conforme aumenta la edad.
